@@ -1,3 +1,6 @@
+from langchain_ollama import ChatOllama
+from langchain_core.prompts import ChatPromptTemplate
+import json
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -61,5 +64,21 @@ async def list_tables():
     tables = conn.execute("SHOW TABLES").fetchdf()
     return {"tables": tables.to_dict(orient="records")}
 
+@app.get("/preview/{table_name}")
+async def preview_table(table_name: str, limit: int = 50):
+    try:
+        df = conn.execute(f"SELECT * FROM {table_name} LIMIT {limit}").fetchdf()
+        
+        # FIX: Replace NaN values with None so JSON works
+        df = df.replace({float('nan'): None})
+        
+        return {
+            "table": table_name,
+            "columns": df.columns.tolist(),
+            "data": df.to_dict(orient="records")
+        }
+    except Exception as e:
+        raise HTTPException(404, detail=f"Table {table_name} not found: {str(e)}")
+    
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
